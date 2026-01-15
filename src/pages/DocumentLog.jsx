@@ -4,19 +4,26 @@ import { Search, Filter, Download, Eye, FileText, ArrowUpRight, ArrowDownLeft, P
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../context/DocumentContext';
 import { useNavigate } from 'react-router-dom';
+import Modal from '../components/Modal';
 
 const DocumentLog = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDoc, setSelectedDoc] = useState(null); // For View Modal
   const [toast, setToast] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, id: null });
   const { user } = useAuth();
   const { documents, deleteDocument } = useDocuments();
   const navigate = useNavigate();
 
   const handleDelete = (id) => {
     if (user?.role !== 'Admin') return;
-    if (window.confirm('¿Está seguro de eliminar este registro?')) {
-      deleteDocument(id);
+    setConfirmModal({ isOpen: true, id });
+  };
+
+  const confirmDelete = () => {
+    if (confirmModal.id) {
+      deleteDocument(confirmModal.id);
+      setConfirmModal({ isOpen: false, id: null });
     }
   };
 
@@ -267,7 +274,38 @@ const DocumentLog = () => {
         )}
       </AnimatePresence>
 
+      {/* Confirm Delete Modal */}
+      <Modal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, id: null })}
+        title="Confirmar Eliminación"
+        type="confirm"
+        footer={(
+          <>
+            <button
+              className="btn-modal-cancel"
+              onClick={() => setConfirmModal({ isOpen: false, id: null })}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn-modal-delete"
+              onClick={confirmDelete}
+            >
+              Eliminar
+            </button>
+          </>
+        )}
+      >
+        <p>¿Está seguro de que desea eliminar este registro? Esta acción no se puede deshacer.</p>
+      </Modal>
+
       <style jsx>{`
+        /* Modal specific buttons */
+        .btn-modal-delete { padding: 8px 20px; background: #ef4444; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .btn-modal-cancel { padding: 8px 20px; background: white; border: 1px solid #e2e8f0; color: #64748b; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .btn-modal-delete:hover { background: #dc2626; }
+
         .log-header-actions {
           display: flex;
           justify-content: space-between;

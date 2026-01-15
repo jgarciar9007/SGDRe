@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Send, FileUp, Calendar, Hash, ArrowRight, Camera, Building, User, Save, Trash2, Paperclip } from 'lucide-react';
 import { useDocuments } from '../context/DocumentContext';
 import { useNavigate, useParams } from 'react-router-dom';
+import Modal from '../components/Modal';
 
 const DocumentEntry = () => {
     const { addDocument, updateDocument, documents, getNextOrderNumber, generateNextDocNumber, departments, externalEntities } = useDocuments();
@@ -24,6 +25,20 @@ const DocumentEntry = () => {
     const [nextOrder, setNextOrder] = useState('...');
     const [attachments, setAttachments] = useState([]); // Array of file objects or metadata
 
+    // Modal states
+    const [newEntityModal, setNewEntityModal] = useState({
+        isOpen: false,
+        field: '',
+        isInternal: false,
+        name: ''
+    });
+    const [alertModal, setAlertModal] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onClose: null
+    });
+
     // Initial setup & Load Data for Edit
     useEffect(() => {
         if (isEditMode) {
@@ -38,8 +53,12 @@ const DocumentEntry = () => {
                     setAttachments([{ name: docToEdit.fileName, size: 0, type: 'legacy' }]);
                 }
             } else {
-                alert('Documento no encontrado');
-                navigate('/log');
+                setAlertModal({
+                    isOpen: true,
+                    title: 'Error',
+                    message: 'Documento no encontrado',
+                    onClose: () => navigate('/log')
+                });
             }
         } else {
             setNextOrder(getNextOrderNumber());
@@ -106,21 +125,71 @@ const DocumentEntry = () => {
 
         if (isEditMode) {
             updateDocument(id, docData);
-            navigate('/log');
+            setAlertModal({
+                isOpen: true,
+                title: 'Éxito',
+                message: 'Registro actualizado correctamente',
+                onClose: () => navigate('/log')
+            });
         } else {
             addDocument(docData);
-            alert('Documento registrado con éxito');
-            navigate('/log');
+            setAlertModal({
+                isOpen: true,
+                title: 'Éxito',
+                message: 'Documento registrado con éxito',
+                onClose: () => navigate('/log')
+            });
         }
     };
 
     // Helper to determine input type (Text vs Select) based on form state
+    const { addDepartment, addExternalEntity } = useDocuments();
+
+    const handleAddNewEntity = (field, isInternal) => {
+        setNewEntityModal({
+            isOpen: true,
+            field,
+            isInternal,
+            name: ''
+        });
+    };
+
+    const confirmNewEntity = async () => {
+        const { field, isInternal, name } = newEntityModal;
+        if (name && name.trim()) {
+            const success = isInternal
+                ? await addDepartment(name.trim())
+                : await addExternalEntity(name.trim());
+
+            if (success) {
+                setFormData(prev => ({ ...prev, [field]: name.trim() }));
+                setNewEntityModal(prev => ({ ...prev, isOpen: false }));
+            } else {
+                setAlertModal({
+                    isOpen: true,
+                    title: 'Atención',
+                    message: 'Error al añadir. Es posible que el nombre ya exista.'
+                });
+            }
+        }
+    };
+
     const renderEntityInput = (field, label, isInternal) => {
         const options = isInternal ? departments : externalEntities;
 
         return (
             <div className="form-group">
-                <label>{label}</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ margin: 0 }}>{label}</label>
+                    <button
+                        type="button"
+                        onClick={() => handleAddNewEntity(field, isInternal)}
+                        className="add-inline-btn"
+                        title={`Añadir nuevo ${isInternal ? 'departamento' : 'entidad'}`}
+                    >
+                        + Nuevo
+                    </button>
+                </div>
                 <div className="input-icon">
                     {isInternal ? <Building size={16} /> : <User size={16} />}
                     <select
@@ -318,6 +387,66 @@ const DocumentEntry = () => {
                 </div>
             </form>
 
+            {/* Modal para Añadir Entidad */}
+            <Modal
+                isOpen={newEntityModal.isOpen}
+                onClose={() => setNewEntityModal(prev => ({ ...prev, isOpen: false }))}
+                title={`Añadir ${newEntityModal.isInternal ? 'Departamento' : 'Entidad Externa'}`}
+                type="prompt"
+                footer={(
+                    <>
+                        <button
+                            className="btn-modal-cancel"
+                            onClick={() => setNewEntityModal(prev => ({ ...prev, isOpen: false }))}
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            className="btn-modal-confirm"
+                            onClick={confirmNewEntity}
+                            disabled={!newEntityModal.name.trim()}
+                        >
+                            Añadir
+                        </button>
+                    </>
+                )}
+            >
+                <div className="modal-prompt-body">
+                    <label>Nombre del nuevo {newEntityModal.isInternal ? 'departamento' : 'lugar'}:</label>
+                    <input
+                        type="text"
+                        value={newEntityModal.name}
+                        onChange={(e) => setNewEntityModal(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Escriba el nombre..."
+                        autoFocus
+                    />
+                </div>
+            </Modal>
+
+            {/* Modal de Alerta/Éxito */}
+            <Modal
+                isOpen={alertModal.isOpen}
+                onClose={() => {
+                    if (alertModal.onClose) alertModal.onClose();
+                    setAlertModal(prev => ({ ...prev, isOpen: false }));
+                }}
+                title={alertModal.title}
+                type="alert"
+                footer={(
+                    <button
+                        className="btn-modal-confirm"
+                        onClick={() => {
+                            if (alertModal.onClose) alertModal.onClose();
+                            setAlertModal(prev => ({ ...prev, isOpen: false }));
+                        }}
+                    >
+                        Aceptar
+                    </button>
+                )}
+            >
+                <p>{alertModal.message}</p>
+            </Modal>
+
             <style jsx>{`
         .entry-container { max-width: 800px; margin: 0 auto; }
         .form-header { padding: 20px 24px; background: white; border-radius: 12px; margin-bottom: 24px; }
@@ -356,6 +485,16 @@ const DocumentEntry = () => {
         
         .mt-4 { margin-top: 24px; }
         .mb-4 { margin-bottom: 24px; }
+        .add-inline-btn { background: none; border: none; color: var(--color-primary); font-size: 0.75rem; font-weight: 700; cursor: pointer; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--color-primary); transition: all 0.2s; }
+        .add-inline-btn:hover { background: var(--color-primary); color: white; }
+
+        /* Modal specific buttons */
+        .btn-modal-confirm { padding: 8px 20px; background: var(--color-primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .btn-modal-cancel { padding: 8px 20px; background: white; border: 1px solid #e2e8f0; color: #64748b; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .btn-modal-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+        .modal-prompt-body { display: flex; flex-direction: column; gap: 12px; }
+        .modal-prompt-body label { font-size: 0.85rem; font-weight: 600; color: #64748b; }
+
         .text-success { color: var(--color-secondary); }
         .text-secondary { color: #3b82f6; }
         .text-muted { color: #94a3b8; font-size: 0.8rem; }

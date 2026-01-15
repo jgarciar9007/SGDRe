@@ -14,7 +14,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // Security & Performance Middleware
 app.use(helmet({
@@ -195,6 +195,42 @@ app.delete('/api/documents/:id', (req, res) => {
             res.json({ "message": "deleted", changes: this.changes });
         }
     );
+});
+
+// --- ENTITY ROUTES ---
+
+// GET All Departments
+app.get('/api/departments', (req, res) => {
+    db.all("SELECT name FROM departments ORDER BY name ASC", [], (err, rows) => {
+        if (err) return res.status(400).json({ "error": err.message });
+        res.json({ "message": "success", "data": rows.map(r => r.name) });
+    });
+});
+
+// POST New Department
+app.post('/api/departments', (req, res) => {
+    const { name } = req.body;
+    db.run("INSERT INTO departments (name) VALUES (?)", [name], function (err) {
+        if (err) return res.status(400).json({ "error": err.message });
+        res.json({ "message": "success", "name": name });
+    });
+});
+
+// GET All External Entities
+app.get('/api/external-entities', (req, res) => {
+    db.all("SELECT name FROM external_entities ORDER BY name ASC", [], (err, rows) => {
+        if (err) return res.status(400).json({ "error": err.message });
+        res.json({ "message": "success", "data": rows.map(r => r.name) });
+    });
+});
+
+// POST New External Entity
+app.post('/api/external-entities', (req, res) => {
+    const { name } = req.body;
+    db.run("INSERT INTO external_entities (name) VALUES (?)", [name], function (err) {
+        if (err) return res.status(400).json({ "error": err.message });
+        res.json({ "message": "success", "name": name });
+    });
 });
 
 // LOGIN

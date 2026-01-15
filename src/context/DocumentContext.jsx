@@ -10,40 +10,13 @@ export const useDocuments = () => {
     return context;
 };
 
-// Master Data Catalogs
-export const DEPARTMENTS = [
-    'Presidencia CNDES',
-    'Secretaría General',
-    'Gabinete Técnico',
-    'Administración y Finanzas',
-    'Recursos Humanos',
-    'Comunicación y Relaciones Públicas',
-    'Informática y Tecnología',
-    'Planificación Estratégica',
-    'Cooperación Internacional',
-    'Archivo y Documentación'
-];
-
-export const EXTERNAL_ENTITIES = [
-    'Presidencia de la República',
-    'Ministerio de Hacienda',
-    'Ministerio de Asuntos Exteriores',
-    'Banco Mundial',
-    'FMI',
-    'PNUD',
-    'Embajadas',
-    'GE Proyectos',
-    'Empresas Privadas',
-    'Particulares'
-];
-
 export const DocumentProvider = ({ children }) => {
     // Documents State
     const [documents, setDocuments] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [externalEntities, setExternalEntities] = useState([]);
 
-    // Counters State for Auto-Numbering (We'll still fetch this or just compute from docs)
-    // For simplicity, we will computer counters from the loaded documents to avoid a separate table for now,
-    // or just maintain local state that refreshes on load.
+    // Counters State for Auto-Numbering
     const [counters, setCounters] = useState({
         salida: 0,
         interno: 0,
@@ -51,6 +24,23 @@ export const DocumentProvider = ({ children }) => {
     });
 
     const API_URL = '/api/documents';
+
+    // Load Entities
+    const fetchEntities = async () => {
+        try {
+            const [deptsRes, extRes] = await Promise.all([
+                fetch('/api/departments'),
+                fetch('/api/external-entities')
+            ]);
+            const deptsData = await deptsRes.json();
+            const extData = await extRes.json();
+
+            if (deptsData.message === 'success') setDepartments(deptsData.data);
+            if (extData.message === 'success') setExternalEntities(extData.data);
+        } catch (error) {
+            console.error("Error loading entities:", error);
+        }
+    };
 
     // Load Documents from API
     const fetchDocuments = async () => {
@@ -97,6 +87,7 @@ export const DocumentProvider = ({ children }) => {
 
     useEffect(() => {
         fetchDocuments();
+        fetchEntities();
     }, []);
 
     const generateNextDocNumber = (type) => {
@@ -109,6 +100,40 @@ export const DocumentProvider = ({ children }) => {
             return `CNDES/INT/${year}/${String(next).padStart(3, '0')}`;
         }
         return '';
+    };
+
+    const addDepartment = async (name) => {
+        try {
+            const response = await fetch('/api/departments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (response.ok) {
+                await fetchEntities();
+                return true;
+            }
+        } catch (error) {
+            console.error("Error adding department:", error);
+        }
+        return false;
+    };
+
+    const addExternalEntity = async (name) => {
+        try {
+            const response = await fetch('/api/external-entities', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (response.ok) {
+                await fetchEntities();
+                return true;
+            }
+        } catch (error) {
+            console.error("Error adding external entity:", error);
+        }
+        return false;
     };
 
     const addDocument = async (doc) => {
@@ -151,8 +176,6 @@ export const DocumentProvider = ({ children }) => {
     };
 
     const updateDocument = async (id, updatedFields) => {
-        // We need merge with existing because PUT usually expects full or we handle partial in backend
-        // Our backend handles partial update for known fields but good to send full
         const oldDoc = documents.find(d => d.id === id);
         const merged = { ...oldDoc, ...updatedFields };
 
@@ -182,8 +205,10 @@ export const DocumentProvider = ({ children }) => {
             updateDocument,
             getNextOrderNumber,
             generateNextDocNumber,
-            departments: DEPARTMENTS,
-            externalEntities: EXTERNAL_ENTITIES
+            departments,
+            externalEntities,
+            addDepartment,
+            addExternalEntity
         }}>
             {children}
         </DocumentContext.Provider>
