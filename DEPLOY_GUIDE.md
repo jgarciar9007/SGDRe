@@ -2,7 +2,10 @@
 
 Esta guía detalla paso a paso cómo desplegar la aplicación **SGDRecep** (Sistema de Gestión Documental) en un servidor Linux Ubuntu.
 
-Esta aplicación es una **Single Page Application (SPA)** construida con React y Vite. Utiliza `localStorage` para persistencia de datos, por lo que no requiere una base de datos externa ni backend complejo; funcionará simplemente sirviendo los archivos estáticos.
+El sistema ahora opera con una arquitectura **Full-Stack**:
+- **Frontend**: React + Vite (Archivos estáticos servidos por Nginx o Express).
+- **Backend**: Node.js + Express + SQLite (API REST y gestión de archivos).
+- **Persistencia**: SQLite (Base de datos local en archivo).
 
 ---
 
@@ -31,7 +34,7 @@ sudo apt install git curl build-essential -y
 
 ### 2.2 Instalar Node.js y NPM
 
-Utilizaremos NodeSource para instalar una versión LTS reciente (v18 o v20).
+Utilizaremos NodeSource para instalar una versión LTS reciente (v20).
 
 ```bash
 # Descargar script de instalación para Node.js 20.x
@@ -60,137 +63,151 @@ Si tienes un firewall activo (`ufw`), permite el tráfico HTTP/HTTPS:
 sudo ufw allow 'Nginx Full'
 ```
 
+### 2.4 Instalar PM2 (Gestor de Procesos para Node.js)
+
+Para mantener el backend ejecutándose en segundo plano:
+
+```bash
+sudo npm install -g pm2
+```
+
 ---
 
 ## 3. Despliegue de la Aplicación
 
 ### 3.1 Obtener el Código Fuente
 
-Tienes dos opciones: clonar desde un repositorio Git (recomendado) o subir los archivos manualmente.
+Clona el repositorio en el directorio web (o sube los archivos vía SFTP).
 
-**Opción A: Clonar Repositorio**
 ```bash
-# Ir al directorio home o web
-cd /var/www/
-
-# Clonar repositorio (reemplaza la URL por la tuya)
-sudo git clone https://github.com/tu-usuario/sgdrecep.git html/sgdrecep
-
-# Entrar al directorio
-cd html/sgdrecep
+cd /var/www/html
+sudo git clone https://github.com/tu-usuario/sgdrecep.git
+cd sgdrecep
 ```
 
-**Opción B: Subir Archivos Manualmente**
-Puedes usar SFTP (FileZilla) o `scp` para subir tu carpeta local del proyecto a `/var/www/html/sgdrecep`.
-
-### 3.2 Instalar Dependencias y Construir
-
-Una vez dentro de la carpeta del proyecto en el servidor:
+### 3.2 Instalar Dependencias del Backend
 
 ```bash
-# Si clonaste como root/sudo, ajusta permisos temporalmente o usa sudo
-# Instalar dependencias del proyecto
+# Entrar a la carpeta del servidor
+cd server
+
+# Instalar dependencias
 sudo npm install
 
-# Construir la aplicación para producción
+# Volver a la raíz
+cd ..
+```
+
+### 3.3 Instalar Dependencias del Frontend y Construir
+
+```bash
+# Instalar dependencias raíz
+sudo npm install
+
+# Construir la aplicación para producción (Genera carpeta 'dist')
 sudo npm run build
 ```
 
-Este comando creará una carpeta llamada **`dist`**. Esta carpeta contiene todos los archivos estáticos optimizados listos para servirse.
+---
+
+## 4. Iniciar el Backend con PM2
+
+El servidor backend debe estar corriendo para manejar la API y la base de datos. Usaremos PM2 para gestionar el proceso.
+
+```bash
+cd server
+# Iniciar el servidor (asegúrate de que esté en el puerto 3000 por defecto)
+pm2 start index.js --name "sgdrecep-api"
+
+# Configurar PM2 para que arranque al inicio del sistema
+pm2 startup
+pm2 save
+```
+
+El servidor ahora debería estar escuchando en `http://localhost:3000`.
 
 ---
 
-## 4. Configurar Nginx
+## 5. Configurar Nginx (Reverse Proxy)
 
-Configuraremos Nginx para servir los archivos de la carpeta `dist`.
+Configuraremos Nginx para:
+1.  Servir los archivos estáticos del Frontend (`dist`) en la raíz `/`.
+2.  Redirigir las peticiones `/api` y `/uploads` al Backend (`localhost:3000`).
 
-### 4.1 Crear Archivo de Configuración
-
-Crea un nuevo archivo de configuración en `sites-available`.
+### 5.1 Crear Archivo de Configuración
 
 ```bash
 sudo nano /etc/nginx/sites-available/sgdrecep
 ```
 
-### 4.2 Contenido de la Configuración
+### 5.2 Contenido de la Configuración
 
-Pega el siguiente contenido. Asegúrate de modificar `server_name` con tu dominio o IP y ajustar la ruta `root` si es distinta.
+Copia y pega lo siguiente (Ajusta `server_name`):
 
 ```nginx
 server {
     listen 80;
-    server_name tu-dominio.com o-tu-ip-publica;
+    server_name tu-dominio.com; # O tu IP pública
 
-    # Ruta a la carpeta 'dist' generada tras el build
+    # Directorio de los estáticos del frontend
     root /var/www/html/sgdrecep/dist;
     index index.html;
 
-    # Configuración principal para SPA (Single Page App)
+    # Configuración principal para SPA (Frontend)
     location / {
-        # Intenta servir el archivo solicitado, si no existe, sirve index.html
         try_files $uri $uri/ /index.html;
     }
 
-    # Caché opcional para archivos estáticos (JS, CSS, Imágenes)
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
-        expires 1y;
-        add_header Cache-Control "public, no-transform";
+    # Proxy para la API (Backend)
+    location /api/ {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
     }
 
-    # Bloques de seguridad básicos (opcional pero recomendado)
+    # Proxy para archivos subidos (Uploads)
+    location /uploads/ {
+        proxy_pass http://localhost:3000/uploads/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    # Seguridad básica
     location ~ /\. {
         deny all;
     }
 }
 ```
 
-Guarda y sal (`Ctrl+O`, `Enter`, `Ctrl+X`).
-
-### 4.3 Activar el Sitio
-
-Crea un enlace simbólico a `sites-enabled`:
+### 5.3 Activar y Reiniciar
 
 ```bash
+# Activar sitio
 sudo ln -s /etc/nginx/sites-available/sgdrecep /etc/nginx/sites-enabled/
-```
 
-### 4.4 Verificar y Reiniciar Nginx
-
-```bash
-# Verificar que no haya errores de sintaxis
+# Verificar sintaxis
 sudo nginx -t
 
-# Si todo dice "syntax is okay", reinicia Nginx
+# Reiniciar Nginx
 sudo systemctl restart nginx
 ```
 
 ---
 
-## 5. ¡Listo!
+## 6. Verificación Final
 
-Ahora puedes acceder a tu servidor mediante el navegador usando tu IP o dominio:
-`http://tu-dominio-o-ip/`
+1.  Accede a tu IP/Dominio. Deberías ver la aplicación.
+2.  Intenta hacer Login o crear un registro. Esto verificará la conexión con la API y SQLite.
+3.  Los datos se guardarán en `server/sgdrecep.db` (fichero creado automáticamente) y los archivos en `server/uploads/`.
 
-La aplicación debería cargar correctamente.
+### Permisos de Carpeta Uploads
+Asegúrate de que la aplicación tenga permisos para escribir archivos:
 
----
-
-## Anexo: Actualizaciones Futuras
-
-Cuando realices cambios en el código y quieras actualizar el servidor:
-
-1.  Entra al directorio: `cd /var/www/html/sgdrecep`
-2.  Baja cambios: `sudo git pull`
-3.  Instala nuevas dependencias (si hay): `sudo npm install`
-4.  Reconstruye el proyecto: `sudo npm run build`
-5.  No es necesario reiniciar Nginx para cambios en archivos estáticos, solo con el build basta.
-
----
-
-## Anexo: Persistencia de Datos (Nota Importante)
-
-Actualmente, el sistema guarda los datos en el **Navegador del Usuario** (`LocalStorage`).
-*   **Ventaja:** No requiere configuración de Base de Datos en el servidor.
-*   **Advertencia:** Si cambias de navegador o borras caché, los datos se pierden localmente en esa máquina. Los datos **NO** se comparten entre diferentes usuarios/ordenadores porque no hay un Backend centralizado.
-
-Si necesitas que varios usuarios vean los mismos datos desde distintas PC, se requeriría implementar un Backend (API) y una Base de Datos real.
+```bash
+sudo chmod -R 755 /var/www/html/sgdrecep/server/uploads
+sudo chown -R www-data:www-data /var/www/html/sgdrecep/server/uploads
+# O si ejecuta como tu usuario actual vía PM2, asegúrate de que ese usuario tenga permisos.
+```

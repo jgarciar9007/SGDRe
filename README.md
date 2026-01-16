@@ -1,16 +1,45 @@
-# React + Vite
+# SGDRecep - Sistema de Gestión Documental
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema de gestión documental desarrollado para el Consejo Nacional para el Desarrollo Económico y Social (CNDES).
+Permite el registro de entrada y salida de documentos, gestión de adjuntos (PDF), y visualización de estadísticas.
 
-Currently, two official plugins are available:
+## 🚀 Tecnologías
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+*   **Frontend**: React (v19), Vite, Framer Motion, Lucide Icons.
+*   **Backend**: Node.js, Express.
+*   **Base de Datos**: SQLite (almacenamiento local persistente).
+*   **Seguridad**: Helmet, CORS.
 
-## React Compiler
+## 🛠️ Instalación y Ejecución Local
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1.  **Instalar dependencias**:
+    ```bash
+    npm install
+    cd server
+    npm install
+    cd ..
+    ```
 
-## Expanding the ESLint configuration
+2.  **Modo Desarrollo**:
+    Ejecuta frontend y backend simultáneamente.
+    ```bash
+    npm run dev:full
+    ```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+3.  **Modo Producción (Local)**:
+    Construye el frontend y sirve todo desde el backend.
+    ```bash
+    npm start
+    ```
+    La aplicación estará disponible en `http://localhost:3000`.
+
+## 📂 Estructura del Proyecto
+
+*   `/src`: Código fuente del Frontend (React).
+*   `/server`: Código del Backend (Node/Express) y Base de datos.
+*   `/dist`: Archivos estáticos generados para producción.
+*   `/server/uploads`: Almacén de archivos adjuntos.
+
+## 📝 Despliegue
+
+Consulta el archivo `DEPLOY_GUIDE.md` para instrucciones detalladas sobre cómo desplegar en un servidor Ubuntu con Nginx y PM2.
